@@ -5,7 +5,7 @@
   "developer_name": "E1Bos",
   "icon": "images/icon.png",
   "options": {
-    "query_debounce": 0
+    "query_debounce": 0.1
   },
   "preferences": [
     {
