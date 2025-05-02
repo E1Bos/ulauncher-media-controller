@@ -35,7 +35,7 @@ class PlayerMain(Extension):
     theme: Theme = Theme.LIGHT
     menu_builder: MenuBuilder
 
-    mute_state: MuteState = MuteState(False, 0)
+    mute_state: MuteState = MuteState(False)
 
     def __init__(self):
         super(PlayerMain, self).__init__()

@@ -103,7 +103,6 @@ class MuteState:
     """Represents the mute state of the device"""
 
     is_muted: bool
-    volume: int
 
     def get_next_action(self) -> str:
         """Get the next action for the mute state (The opposite of the current state)"""

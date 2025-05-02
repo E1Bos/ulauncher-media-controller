@@ -118,6 +118,11 @@ class InteractionListener(EventListener):
 
                 vol_int: int = int(vol_amount_str)
                 AudioController.global_volume(vol_int)
+
+                if vol_int == 0:
+                    extension.mute_state.is_muted = True
+                else:
+                    extension.mute_state.is_muted = False
             except (TypeError, ValueError) as e:
                 logger.error(
                     f"Could not parse query: {query}: {e.with_traceback(None)}"
