@@ -68,8 +68,25 @@ class AudioController:
             set_vol (int): The volume to set
         """
         cleaned_vol: str = str(max(0, min(set_vol, 100)))
+
+        if cleaned_vol == "0":
+            AudioController.set_mute(True)
+        else:
+            AudioController.set_mute(False)
+            AudioController.__run_command(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{cleaned_vol}%"]
+            )
+
+    @staticmethod
+    def set_mute(mute: bool) -> None:
+        """
+        Mute or unmute the audio
+
+        Parameters:
+            mute (bool): Whether to mute or unmute
+        """
         AudioController.__run_command(
-            ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{cleaned_vol}%"]
+            ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "1" if mute else "0"]
         )
 
     @staticmethod
@@ -81,6 +98,7 @@ class AudioController:
 
     @staticmethod
     def repeat(player_status: PlayerStatus) -> None:
+        """Toggle repeat state"""
         next_state = player_status.repeat_state.next()
         AudioController.__run_command(
             ["playerctl", "-p", "playerctld", "loop", next_state.value]

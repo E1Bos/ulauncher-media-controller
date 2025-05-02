@@ -31,9 +31,11 @@ class KeywordListener(EventListener):
         Returns:
             RenderResultListAction: A list of items to render
         """
-        theme: str = extension.get_theme()
+        extension.refresh_theme()
+
+        menu_builder: MenuBuilder = extension.menu_builder
         arguments: None | str = event.get_argument()
-        
+
         player_status: PlayerStatus = AudioController.get_player_status()
         playback_state: MediaPlaybackState = player_status.playback_state
 
@@ -42,6 +44,20 @@ class KeywordListener(EventListener):
 
         command, *components = arguments.split()
         aliases = extension.get_aliases()
+
+        # process split command (i.e. "vol50")
+        if (
+            command
+            and any(c.isalpha() for c in command)
+            and any(c.isdigit() for c in command)
+        ):
+            alpha_part = "".join(c for c in command if c.isalpha())
+            digit_part = "".join(c for c in command if c.isdigit())
+
+            # only process if we have both parts
+            if alpha_part and digit_part:
+                command = alpha_part
+                components.append(digit_part)
 
         alpha_command: str = "".join(filter(str.isalpha, command.lower()))
         if alpha_command in aliases:
@@ -53,9 +69,11 @@ class KeywordListener(EventListener):
         render_items: list[ExtensionResultItem]
         query = Query(command, components)
         if playback_state == MediaPlaybackState.NO_PLAYER:
-            render_items = MenuBuilder.build_volume_and_mute(theme, query)
+            render_items = menu_builder.build_volume_and_mute(
+                extension.mute_state, query
+            )
         else:
-            render_items = MenuBuilder.build_main_menu(theme=theme, query=query)
+            render_items = menu_builder.build_main_menu(query=query)
 
         search_terms: list[str] = command.lower().split()
         matched_search: list[ExtensionResultItem] = [

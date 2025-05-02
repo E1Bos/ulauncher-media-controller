@@ -51,6 +51,26 @@ class Actions(Enum):
     SELECT_PLAYER = auto()
 
 
+class Theme(Enum):
+    """Theme for the player"""
+
+    LIGHT = "light"
+    DARK = "dark"
+
+    def __str__(self) -> str:
+        return self.value
+
+    @classmethod
+    def from_str(cls, theme: str) -> "Theme":
+        """Convert a string to a Theme enum"""
+        if theme.lower() == "dark":
+            return cls.DARK
+        elif theme.lower() == "light":
+            return cls.LIGHT
+        else:
+            raise ValueError(f"Invalid theme: {theme}")
+
+
 @dataclass
 class PlayerStatus:
     """Represents the status of the player"""
@@ -76,3 +96,15 @@ class CurrentMedia:
 class Query:
     command: str
     components: list[str]
+
+
+@dataclass
+class MuteState:
+    """Represents the mute state of the device"""
+
+    is_muted: bool
+    volume: int
+
+    def get_next_action(self) -> str:
+        """Get the next action for the mute state (The opposite of the current state)"""
+        return "Unmute" if self.is_muted else "Mute"

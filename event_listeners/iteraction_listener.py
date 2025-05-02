@@ -98,7 +98,12 @@ class InteractionListener(EventListener):
                     "Does the player support this action?",
                 )
         elif action == Actions.MUTE:
-            AudioController.global_volume(0)
+            if extension.mute_state.is_muted:
+                extension.mute_state.is_muted = False
+                AudioController.set_mute(False)
+            else:
+                extension.mute_state.is_muted = True
+                AudioController.set_mute(True)
         elif action == Actions.SET_VOL:
             try:
                 if len(query.components) == 0:

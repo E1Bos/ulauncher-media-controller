@@ -6,6 +6,8 @@ from .data_classes import (
     ShuffleState,
     Actions,
     Query,
+    Theme,
+    MuteState,
 )
 
 __all__ = [
@@ -16,4 +18,6 @@ __all__ = [
     "ShuffleState",
     "Actions",
     "Query",
+    "Theme",
+    "MuteState",
 ]

@@ -1,30 +1,30 @@
 {
-  "required_api_version": "^2.0.0",
-  "name": "Media Controller",
-  "description": "Control your media. Anytime, Anywhere.",
-  "developer_name": "E1Bos",
-  "icon": "images/icon.png",
-  "options": {
-    "query_debounce": 0.1
-  },
-  "preferences": [
-    {
-      "id": "media_controller",
-      "type": "keyword",
-      "name": "Media controller",
-      "description": "Extension keyword",
-      "default_value": "m"
-    },
-    {
-      "id": "icon_theme",
-      "type": "select",
-      "name": "Icon theme",
-      "description": "Change the icon theme color",
-      "default_value": "light",
-      "options": [
-        { "value": "light", "text": "Light" },
-        { "value": "dark", "text": "Dark" }
-      ]
-    }
-  ]
+	"required_api_version": "^2.0.0",
+	"name": "Media Controller",
+	"description": "Control your media. Anytime, Anywhere.",
+	"developer_name": "E1Bos",
+	"icon": "images/icon.png",
+	"options": {
+		"query_debounce": 0.1
+	},
+	"preferences": [
+		{
+			"id": "media_controller",
+			"type": "keyword",
+			"name": "Media controller",
+			"description": "Extension keyword",
+			"default_value": "m"
+		},
+		{
+			"id": "icon_theme",
+			"type": "select",
+			"name": "Icon theme",
+			"description": "Change the icon theme color",
+			"default_value": "light",
+			"options": [
+				{ "value": "light", "text": "Light" },
+				{ "value": "dark", "text": "Dark" }
+			]
+		}
+	]
 }
