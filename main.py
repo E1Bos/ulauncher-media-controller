@@ -1,16 +1,15 @@
 from ulauncher.api.client.Extension import Extension
 from ulauncher.api.shared.event import KeywordQueryEvent, ItemEnterEvent
 from ulauncher.api.shared.item.ExtensionResultItem import ExtensionResultItem
-from ulauncher.api.shared.action.DoNothingAction import DoNothingAction
 from ulauncher.api.shared.action.RenderResultListAction import RenderResultListAction
 from audio_controller import AudioController
+from data_classes.data_classes import MenuItem
 from event_listeners import InteractionListener, KeywordListener
 from menu_builder import MenuBuilder
 from data_classes import (
     PlayerStatus,
     MediaPlaybackState,
     Actions,
-    CurrentMedia,
     Theme,
     MuteState,
 )
@@ -22,15 +21,15 @@ logger = logging.getLogger(__name__)
 
 class PlayerMain(Extension):
     __keep_open: list[Actions] = [Actions.NEXT, Actions.PREV, Actions.REPEAT]
-    __aliases = {
-        # p: play/pause
-        "n": "next",
-        "b": "previous",
-        "v": "volume",
-        # m: mute/unmute
-        "vol": "volume",
-        "r": "repeat",
-        "s": "shuffle",
+    aliases = {
+        "p": [MenuItem.PLAY_PAUSE],
+        "n": [MenuItem.NEXT_TRACK, MenuItem.CURRENT_MEDIA],
+        "b": [MenuItem.PREV_TRACK, MenuItem.CURRENT_MEDIA],
+        "v": [MenuItem.VOLUME],
+        "vol": [MenuItem.VOLUME],
+        "m": [MenuItem.MUTE],
+        "r": [MenuItem.REPEAT],
+        "s": [MenuItem.SHUFFLE],
     }
     theme: Theme = Theme.LIGHT
     menu_builder: MenuBuilder
@@ -44,19 +43,6 @@ class PlayerMain(Extension):
 
         self.subscribe(KeywordQueryEvent, KeywordListener())
         self.subscribe(ItemEnterEvent, InteractionListener())
-
-    def get_aliases(self) -> dict[str, str]:
-        player_status = AudioController.get_player_status()
-        aliases = {
-            "p": "play"
-            if player_status.playback_state == MediaPlaybackState.PAUSED
-            else "pause",
-            "m": self.mute_state.get_next_action().lower(),
-        }
-
-        aliases.update(self.__aliases)
-
-        return aliases
 
     def refresh_theme(self) -> None:
         self.theme = Theme.from_str(self.preferences["icon_theme"])
@@ -86,41 +72,36 @@ class PlayerMain(Extension):
             return RenderResultListAction(self.menu_builder.no_player_item())
 
         if action is Actions.NEXT:
-            items.append(self.menu_builder.build_next_track())
+            items.extend(
+                self.menu_builder.build_menu(
+                    [MenuItem.NEXT_TRACK, MenuItem.CURRENT_MEDIA]
+                )
+            )
+
         elif action is Actions.PREV:
-            items.append(self.menu_builder.build_previous_track())
+            items.extend(
+                self.menu_builder.build_menu(
+                    [MenuItem.PREV_TRACK, MenuItem.CURRENT_MEDIA]
+                )
+            )
+
         elif action is Actions.REPEAT:
-            repeat_item = self.menu_builder.build_repeat(player_status)
+            repeat_item: list[ExtensionResultItem] = self.menu_builder.build_menu(
+                [MenuItem.REPEAT]
+            )
 
             if repeat_item:
-                items.append(repeat_item)
-
-        current_media: CurrentMedia = AudioController.get_current_media()
-        icon_path: Path = AudioController.get_media_thumbnail(current_media)
-
-        current_media_title = f"{current_media.title}"
-        album = f" | {current_media.album}" if current_media.album else ""
-        current_media_desc = (
-            f"By {current_media.artist}{album} | {current_media.player}"
-        )
-        items.append(
-            ExtensionResultItem(
-                icon=str(icon_path),
-                name=current_media_title,
-                description=current_media_desc,
-                on_enter=DoNothingAction(),
-            )
-        )
+                items.extend(repeat_item)
 
         if action in self.__keep_open:
             return RenderResultListAction(items)
 
-        items.extend(self.menu_builder.build_main_menu(player_status))
+        items.extend(self.menu_builder.build_main_menu())
 
         return RenderResultListAction(items)
 
     def render_players(self) -> RenderResultListAction:
-        items = self.menu_builder.build_player_select()
+        items = self.menu_builder.build_player_select_items()
 
         return RenderResultListAction(items)
 

@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from ulauncher.api.shared.item.ExtensionResultItem import ExtensionResultItem
 from ulauncher.api.shared.action.ExtensionCustomAction import ExtensionCustomAction
 from ulauncher.api.shared.action.HideWindowAction import HideWindowAction
@@ -13,9 +14,11 @@ from data_classes import (
     Query,
     Theme,
     MuteState,
+    MenuItem,
+    CurrentMedia,
 )
-
 from typing import TYPE_CHECKING
+
 
 if TYPE_CHECKING:
     from main import PlayerMain
@@ -25,6 +28,19 @@ logger = logging.getLogger(__name__)
 
 class MenuBuilder:
     """Builds menu items"""
+
+    # Default order for the main menu
+    DEFAULT_MENU_ORDER = [
+        MenuItem.CURRENT_MEDIA,
+        MenuItem.PLAY_PAUSE,
+        MenuItem.NEXT_TRACK,
+        MenuItem.PREV_TRACK,
+        MenuItem.SHUFFLE,
+        MenuItem.REPEAT,
+        MenuItem.VOLUME,
+        MenuItem.MUTE,
+        MenuItem.PLAYER_SELECT_MENU,
+    ]
 
     def __init__(self, extension: "PlayerMain"):
         """
@@ -45,17 +61,41 @@ class MenuBuilder:
         self.theme = theme
         self.icon_folder = f"images/{self.theme.value}"
 
+    def build_current_media(self) -> ExtensionResultItem:
+        """
+        Build the current media item
+
+        Returns:
+            ExtensionResultItem: The current media item
+        """
+
+        current_media: CurrentMedia = AudioController.get_current_media()
+        icon_path: Path = AudioController.get_media_thumbnail(current_media)
+
+        current_media_title = f"{current_media.title}"
+        album = f" | {current_media.album}" if current_media.album else ""
+        current_media_desc = (
+            f"By {current_media.artist}{album} | {current_media.player}"
+        )
+
+        return ExtensionResultItem(
+            icon=str(icon_path),
+            name=current_media_title,
+            description=current_media_desc,
+            on_enter=DoNothingAction(),
+        )
+
     def build_play_pause(self, player_status: PlayerStatus) -> ExtensionResultItem:
         """
         Build the play/pause item
 
         Args:
-            theme (Theme): The theme for the player
             player_status (PlayerStatus): The current status of the player
 
         Returns:
             ExtensionResultItem: The play/pause item
         """
+
         opposite_status: str = (
             MediaPlaybackState.PAUSED.value
             if player_status.playback_state == MediaPlaybackState.PLAYING
@@ -109,24 +149,21 @@ class MenuBuilder:
             player_status (PlayerStatus): The current status of the player
 
         Returns:
-            ExtensionResultItem | None: The shuffle item
+            ExtensionResultItem | None: The shuffle item or None if unavailable
         """
 
         if player_status.shuffle_state == ShuffleState.UNAVAILABLE:
             return None
-            # return ExtensionResultItem(
-            #     icon=f"{icon_folder}/shuffle.svg",
-            #     name="Shuffle Unavailable",
-            #     description="Current player does not support shuffle",
-            #     on_enter=DoNothingAction(),
-            # )
 
-        shuffle_str: str = player_status.shuffle_state.name.lower()
-        shuffle_opp: str = "off" if shuffle_str == "On" else "on"
+        is_on = player_status.shuffle_state == ShuffleState.ON
+        state_str = "On" if is_on else "Off"
+        icon = f"{self.icon_folder}/shuffle_{state_str.lower()}.svg"
+        desc = f"Turn shuffle {'off' if is_on else 'on'}"
+
         return ExtensionResultItem(
-            icon=f"{self.icon_folder}/shuffle_{shuffle_str}.svg",
-            name=f"Shuffle {shuffle_str}",
-            description=f"Turn shuffle {shuffle_opp}",
+            icon=icon,
+            name=f"Shuffle {state_str}",
+            description=desc,
             on_enter=ExtensionCustomAction({"action": Actions.SHUFFLE}),
         )
 
@@ -138,125 +175,93 @@ class MenuBuilder:
             player_status (PlayerStatus): The current status of the player
 
         Returns:
-            ExtensionResultItem | None: The repeat item
+            ExtensionResultItem | None: The repeat item or None if unavailable
         """
 
         if player_status.repeat_state == RepeatState.UNAVAILABLE:
             return None
-            # return ExtensionResultItem(
-            #     icon=f"{icon_folder}/repeat.svg",
-            #     name="Repeat Unavailable",
-            #     description="Current player does not support repeating",
-            #     on_enter=DoNothingAction(),
-            # )
 
-        repeat_str: str = player_status.repeat_state.name.lower()
-        repeat_nxt: str = player_status.repeat_state.next().name.lower()
+        current = player_status.repeat_state
+        next_state = current.next()
+        icon = f"{self.icon_folder}/repeat_{current.name.lower()}.svg"
+
         return ExtensionResultItem(
-            icon=f"{self.icon_folder}/repeat_{repeat_str}.svg",
-            name=f"Repeat: {repeat_str.capitalize()}",
-            description=f"Switch to {repeat_nxt}",
+            icon=icon,
+            name=f"Repeat: {current.name.capitalize()}",
+            description=f"Switch to {next_state.name.lower()}",
             on_enter=ExtensionCustomAction(
                 {"action": Actions.REPEAT}, keep_app_open=True
             ),
         )
 
-    def build_volume_and_mute(
+    def build_volume(
         self,
-        mute_state: MuteState,
         query: Query | None = None,
-    ) -> list[ExtensionResultItem]:
+    ) -> ExtensionResultItem:
         """
-        Build the volume and mute items
+        Build the volume item
 
         Args:
-            mute_state (MuteState): The current mute state
             query (Query | None, optional): The query object. Defaults to None.
 
         Returns:
-            list[ExtensionResultItem]: The volume and mute items
+            ExtensionResultItem: The volume item
         """
 
-        items: list[ExtensionResultItem] = []
-        items.append(
-            ExtensionResultItem(
-                icon=f"{self.icon_folder}/volume.svg",
-                name="Volume",
-                description="Set volume between 0-100",
-                on_enter=ExtensionCustomAction(
-                    {"action": Actions.SET_VOL, "query": query}
-                ),
+        action: ExtensionCustomAction | DoNothingAction = DoNothingAction()
+        if query is not None and len(query.components) > 0:
+            action = ExtensionCustomAction(
+                {"action": Actions.SET_VOL, "query": query},
             )
+
+        return ExtensionResultItem(
+            icon=f"{self.icon_folder}/volume.svg",
+            name="Volume",
+            description="Set volume between 0-100",
+            on_enter=action,
         )
 
-        mute_action: str = mute_state.get_next_action()
-        items.append(
-            ExtensionResultItem(
-                icon=f"{self.icon_folder}/mute.svg",
-                name=mute_action,
-                description=f"{mute_action} global volume",
-                on_enter=ExtensionCustomAction(
-                    {"action": Actions.MUTE, "state": mute_state}
-                ),
-            )
-        )
-
-        return items
-
-    def build_main_menu(
+    def build_mute(
         self,
-        player_status: PlayerStatus | None = None,
-        query: Query | None = None,
-    ) -> list[ExtensionResultItem]:
+        mute_state: MuteState,
+    ) -> ExtensionResultItem:
         """
-        Build the main user interface, which contains the play/pause,
-        next, previous, volume, mute, and change player items
+        Build the mute item
 
         Args:
-            player_status (PlayerStatus, optional): The current player status
-            components (list[str], optional): Command components
+            mute_state (MuteState): The current mute state
 
         Returns:
-            list[ExtensionResultItem]: The main user interface
+            ExtensionResultItem: The mute item
         """
-        items: list[ExtensionResultItem] = []
-        if not query:
-            query = Query("", [])
-
-        player_status = (
-            AudioController.get_player_status() if not player_status else player_status
+        mute_action: str = mute_state.get_next_action()
+        return ExtensionResultItem(
+            icon=f"{self.icon_folder}/mute.svg",
+            name=mute_action,
+            description=f"{mute_action} global volume",
+            on_enter=ExtensionCustomAction(
+                {"action": Actions.MUTE, "state": mute_state}
+            ),
         )
 
-        items.append(self.build_play_pause(player_status))
+    def build_player_select(self) -> ExtensionResultItem:
+        """
+        Build the player select item
 
-        items.append(self.build_next_track())
+        Returns:
+            ExtensionResultItem: The player select item
+        """
 
-        items.append(self.build_previous_track())
-
-        items.extend(self.build_volume_and_mute(self.extension.mute_state, query))
-
-        shuffle_item: ExtensionResultItem | None = self.build_shuffle(player_status)
-        if shuffle_item:
-            items.append(shuffle_item)
-
-        loop_item: ExtensionResultItem | None = self.build_repeat(player_status)
-        if loop_item:
-            items.append(loop_item)
-
-        items.append(
-            ExtensionResultItem(
-                icon=f"{self.icon_folder}/switch.svg",
-                name="Change player",
-                description="Change music player",
-                on_enter=ExtensionCustomAction(
-                    {"action": Actions.PLAYER_SELECT_MENU}, keep_app_open=True
-                ),
-            )
+        return ExtensionResultItem(
+            icon=f"{self.icon_folder}/switch.svg",
+            name="Change player",
+            description="Change music player",
+            on_enter=ExtensionCustomAction(
+                {"action": Actions.PLAYER_SELECT_MENU}, keep_app_open=True
+            ),
         )
 
-        return items
-
-    def build_player_select(self) -> list[ExtensionResultItem]:
+    def build_player_select_items(self) -> list[ExtensionResultItem]:
         """
         Build the player select menu
 
@@ -308,7 +313,7 @@ class MenuBuilder:
                 on_enter=HideWindowAction(),
             )
         )
-        items.extend(self.build_volume_and_mute(self.extension.mute_state))
+        items.extend(self.build_menu([MenuItem.VOLUME, MenuItem.MUTE]))
         return items
 
     def build_error(self, title: str, message: str) -> ExtensionResultItem:
@@ -318,6 +323,9 @@ class MenuBuilder:
         Args:
             title (str): The title of the error
             message (str): The error message
+
+        Returns:
+            ExtensionResultItem: The error item
         """
         return ExtensionResultItem(
             icon=f"{self.icon_folder}/warning.svg",
@@ -325,3 +333,77 @@ class MenuBuilder:
             description=message,
             on_enter=HideWindowAction(),
         )
+
+    def build_main_menu(
+        self,
+        query: Query | None = None,
+    ) -> list[ExtensionResultItem]:
+        """
+        Build the main user interface, which contains the play/pause,
+        next, previous, volume, mute, and change player items
+
+        Args:
+            query (Query | None, optional): The query object. Defaults to None.
+
+        Returns:
+            list[ExtensionResultItem]: The main user interface
+        """
+        if not query:
+            query = Query("", [])
+
+        main_menu = MenuBuilder.DEFAULT_MENU_ORDER
+
+        return self.build_menu(main_menu, query)
+
+    def build_menu(
+        self,
+        menu_order: list[MenuItem],
+        query: Query | None = None,
+    ) -> list[ExtensionResultItem]:
+        """
+        Build the menu based on the menu order
+
+        Args:
+            menu_order (list[MenuItem]): The menu order
+            query (Query | None, optional): The query object. Defaults to None.
+
+        Returns:
+            list[ExtensionResultItem]: The menu items
+        """
+        items: list[ExtensionResultItem] = []
+
+        player_status = AudioController.get_player_status()
+        mute_state: MuteState = self.extension.mute_state
+
+        for item in menu_order:
+            match item:
+                case MenuItem.CURRENT_MEDIA:
+                    items.append(self.build_current_media())
+                case MenuItem.PLAY_PAUSE:
+                    items.append(self.build_play_pause(player_status))
+                case MenuItem.NEXT_TRACK:
+                    items.append(self.build_next_track())
+                case MenuItem.PREV_TRACK:
+                    items.append(self.build_previous_track())
+                case MenuItem.SHUFFLE:
+                    shuffle_item: ExtensionResultItem | None = self.build_shuffle(
+                        player_status
+                    )
+                    if shuffle_item:
+                        items.append(shuffle_item)
+                case MenuItem.REPEAT:
+                    repeat_item: ExtensionResultItem | None = self.build_repeat(
+                        player_status
+                    )
+                    if repeat_item:
+                        items.append(repeat_item)
+                case MenuItem.VOLUME:
+                    items.append(self.build_volume(query))
+                case MenuItem.MUTE:
+                    items.append(self.build_mute(mute_state))
+                case MenuItem.PLAYER_SELECT_MENU:
+                    items.append(self.build_player_select())
+                case MenuItem.ERROR:
+                    pass
+
+        return items

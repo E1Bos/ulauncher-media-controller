@@ -8,6 +8,7 @@ from .data_classes import (
     Query,
     Theme,
     MuteState,
+    MenuItem,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "Query",
     "Theme",
     "MuteState",
+    "MenuItem",
 ]

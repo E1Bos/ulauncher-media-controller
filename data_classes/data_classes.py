@@ -2,6 +2,23 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 
+class MenuItem(Enum):
+    """Represents the menu items for the player"""
+
+    CURRENT_MEDIA = auto()
+    PLAY_PAUSE = auto()
+    NEXT_TRACK = auto()
+    PREV_TRACK = auto()
+    SHUFFLE = auto()
+    REPEAT = auto()
+    VOLUME = auto()
+    MUTE = auto()
+    PLAYER_SELECT_MENU = auto()
+    SELECT_PLAYER = auto()
+    NO_MEDIA = auto()
+    ERROR = auto()
+
+
 class MediaPlaybackState(Enum):
     """Represents the status of the player"""
 
@@ -96,6 +113,29 @@ class CurrentMedia:
 class Query:
     command: str
     components: list[str]
+
+    @classmethod
+    def from_string(cls, argument: str) -> "Query":
+        """
+        Parse a raw argument string into command and components,
+        handling alpha-numeric parts like "vol50".
+        """
+        parts = argument.split()
+        command, *components = parts
+
+        # split command into letters and digits if it contains both
+        # e.g. "vol50" -> command = "vol", components = ["50"]
+        if (
+            command
+            and any(c.isalpha() for c in command)
+            and any(c.isdigit() for c in command)
+        ):
+            alpha = "".join(c for c in command if c.isalpha())
+            digit = "".join(c for c in command if c.isdigit())
+            if alpha and digit:
+                command = alpha
+                components.insert(0, digit)
+        return cls(command, components)
 
 
 @dataclass

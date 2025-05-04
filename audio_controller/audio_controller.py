@@ -19,6 +19,32 @@ logger = logging.getLogger(__name__)
 class AudioController:
     """Controller for audio actions"""
 
+    # Default MPRIS controller name
+    PLAYER = "playerctld"
+
+    @staticmethod
+    def _pc(args: list[str], check: bool = True) -> str:
+        """
+        Run a playerctl command for the default player.
+        """
+        return AudioController.__run_command(
+            ["playerctl", "-p", AudioController.PLAYER, *args], check
+        )
+
+    @staticmethod
+    def pause_all() -> None:
+        """
+        Pause all media players.
+        """
+        AudioController.__run_command(["playerctl", "--all-players", "pause"])
+
+    @staticmethod
+    def _pc_player(player: str, args: list[str], check: bool = True) -> str:
+        """
+        Run a playerctl command for a specific player.
+        """
+        return AudioController.__run_command(["playerctl", "-p", player, *args], check)
+
     media_cover_path: Path = Path("/tmp/ulauncher-media-player/media-thumbnails")
 
     @staticmethod
@@ -39,25 +65,23 @@ class AudioController:
     @staticmethod
     def playpause() -> None:
         """Toggle play/pause"""
-        AudioController.__run_command(["playerctl", "-p", "playerctld", "play-pause"])
+        AudioController._pc(["play-pause"])
 
     @staticmethod
     def next() -> None:
         """Skip to the next track"""
-        AudioController.__run_command(["playerctl", "-p", "playerctld", "next"])
+        AudioController._pc(["next"])
 
     @staticmethod
     def prev() -> None:
         """Skip to the previous track"""
-        AudioController.__run_command(["playerctl", "-p", "playerctld", "previous"])
+        AudioController._pc(["previous"])
 
     @staticmethod
     def jump(pos: str) -> None:
         """Jump to a specific position in the track"""
         # TODO: Implement this
-        AudioController.__run_command(
-            ["playerctl", "-p", "playerctld", "position", pos]
-        )
+        AudioController._pc(["position", pos])
 
     @staticmethod
     def global_volume(set_vol: int) -> None:
@@ -92,17 +116,13 @@ class AudioController:
     @staticmethod
     def shuffle() -> None:
         """Toggle shuffle"""
-        AudioController.__run_command(
-            ["playerctl", "-p", "playerctld", "shuffle", "toggle"]
-        )
+        AudioController._pc(["shuffle", "toggle"])
 
     @staticmethod
     def repeat(player_status: PlayerStatus) -> None:
         """Toggle repeat state"""
         next_state = player_status.repeat_state.next()
-        AudioController.__run_command(
-            ["playerctl", "-p", "playerctld", "loop", next_state.value]
-        )
+        AudioController._pc(["loop", next_state.value])
 
     @staticmethod
     def get_player_status() -> PlayerStatus:
@@ -115,13 +135,9 @@ class AudioController:
         Returns:
             PlayerStatus: The status of the player
         """
-        player_status = AudioController.__run_command(["playerctl", "status"], False)
-        shuffle_status = AudioController.__run_command(
-            ["playerctl", "-p", "playerctld", "shuffle"], False
-        )
-        loop_status = AudioController.__run_command(
-            ["playerctl", "-p", "playerctld", "loop"], False
-        )
+        player_status = AudioController._pc(["status"], False)
+        shuffle_status = AudioController._pc(["shuffle"], False)
+        loop_status = AudioController._pc(["loop"], False)
 
         media_state: MediaPlaybackState = Parser.parse_media_state(player_status)
         shuffle_state: ShuffleState = Parser.parse_shuffle_state(shuffle_status)
@@ -151,10 +167,11 @@ class AudioController:
         Parameters:
             player (str): The player
         """
-        AudioController.__run_command(["playerctl", "--all-players", "pause"])
-        AudioController.__run_command(["playerctl", "-p", player, "play"])
-        AudioController.__run_command(["playerctl", "-p", player, "pause"])
-        AudioController.__run_command(["playerctl", "-p", player, "play-pause"])
+        # Pause all players, then switch and resume selected player
+        AudioController.pause_all()
+        AudioController._pc_player(player, ["play"])
+        AudioController._pc_player(player, ["pause"])
+        AudioController._pc_player(player, ["play-pause"])
 
     @staticmethod
     def get_current_media() -> CurrentMedia:
@@ -164,14 +181,13 @@ class AudioController:
         Returns:
             CurrentMedia: The current playing media metadata
         """
-        result = AudioController.__run_command(
-            [
-                "playerctl",
-                "metadata",
-                "--format",
-                "artUrl:{{mpris:artUrl}}\nartist:{{xesam:artist}}\ntitle:{{xesam:title}}\nalbum:{{xesam:album}}\nplayerName:{{playerName}}\nposition:{{position}}",
-            ]
+        # Retrieve metadata for default player
+        format_str = (
+            "artUrl:{{mpris:artUrl}}\nartist:{{xesam:artist}}\n"
+            "title:{{xesam:title}}\nalbum:{{xesam:album}}\n"
+            "playerName:{{playerName}}\nposition:{{position}}"
         )
+        result = AudioController._pc(["metadata", "--format", format_str])
 
         artUrl = Parser.extract_regex_item("artUrl", result)
         artist = Parser.extract_regex_item("artist", result)

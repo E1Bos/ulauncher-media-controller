@@ -2,10 +2,9 @@ import logging
 from ulauncher.api.client.EventListener import EventListener
 from ulauncher.api.shared.event import KeywordQueryEvent
 from ulauncher.api.shared.action.RenderResultListAction import RenderResultListAction
-from ulauncher.api.shared.item.ExtensionResultItem import ExtensionResultItem
 from audio_controller import AudioController
 from menu_builder import MenuBuilder
-from data_classes import Query, MediaPlaybackState, PlayerStatus
+from data_classes import Query, MediaPlaybackState, PlayerStatus, MenuItem
 
 from typing import TYPE_CHECKING
 
@@ -42,44 +41,27 @@ class KeywordListener(EventListener):
         if arguments is None or playback_state == MediaPlaybackState.ERROR:
             return extension.render_main_page(player_status=player_status)
 
-        command, *components = arguments.split()
-        aliases = extension.get_aliases()
+        query = Query.from_string(arguments)
+        aliases = extension.aliases
 
-        # process split command (i.e. "vol50")
-        if (
-            command
-            and any(c.isalpha() for c in command)
-            and any(c.isdigit() for c in command)
-        ):
-            alpha_part = "".join(c for c in command if c.isalpha())
-            digit_part = "".join(c for c in command if c.isdigit())
-
-            # only process if we have both parts
-            if alpha_part and digit_part:
-                command = alpha_part
-                components.append(digit_part)
-
-        alpha_command: str = "".join(filter(str.isalpha, command.lower()))
+        # Handle aliases
+        alpha_command = "".join(filter(str.isalpha, query.command.lower()))
         if alpha_command in aliases:
-            decimal_command: str = "".join(filter(str.isdecimal, command))
-            if decimal_command:
-                components.append(decimal_command)
-            command = aliases[alpha_command]
+            items = menu_builder.build_menu(aliases[alpha_command], query)
+            return RenderResultListAction(items)
 
-        render_items: list[ExtensionResultItem]
-        query = Query(command, components)
         if playback_state == MediaPlaybackState.NO_PLAYER:
-            render_items = menu_builder.build_volume_and_mute(
-                extension.mute_state, query
+            render_items = menu_builder.build_menu(
+                [MenuItem.VOLUME, MenuItem.MUTE], query
             )
         else:
             render_items = menu_builder.build_main_menu(query=query)
 
-        search_terms: list[str] = command.lower().split()
-        matched_search: list[ExtensionResultItem] = [
+        search_terms = arguments.lower().split()
+        matched = [
             item
             for item in render_items
             if any(term in item.get_name().lower() for term in search_terms)
         ]
 
-        return RenderResultListAction(matched_search)
+        return RenderResultListAction(matched)
