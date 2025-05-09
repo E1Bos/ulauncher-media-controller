@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import logging
 import re
+import hashlib
 
 from data_classes import (
     CurrentMedia,
@@ -221,9 +222,12 @@ class AudioController:
         if not cover_path.exists():
             cover_path.mkdir(parents=True, exist_ok=True)
 
+        hash_str = f"{media.title}-{media.artist}".encode("utf-8")
+        hash_object = hashlib.md5(hash_str)
+        hash_hex = hash_object.hexdigest()
         local_filename = Path(
             cover_path,
-            f"{'-'.join(media.title.split())}-{'-'.join(media.artist.split())}.png",
+            f"{hash_hex}.png",
         )
 
         if local_filename.exists():
@@ -254,14 +258,17 @@ class AudioController:
             media (CurrentMedia): The current media
             local_filename (Path): The local filename to save the thumbnail
         """
+        timeout_secs: float = 1
+        tries: int = 3
+
         try:
             result = subprocess.run(
                 [
                     "wget",
                     "-t",
-                    "1",
+                    str(tries),
                     "-T",
-                    "0.2",
+                    str(timeout_secs),
                     "-O",
                     str(local_filename),
                     media.thumbnail_path,
