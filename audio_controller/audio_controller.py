@@ -4,7 +4,9 @@ from pathlib import Path
 import subprocess
 import logging
 import re
-import hashlib
+import threading
+import base64
+import gi
 
 from data_classes import (
     CurrentMedia,
@@ -13,6 +15,9 @@ from data_classes import (
     RepeatState,
     ShuffleState,
 )
+
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf  # type: ignore  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +94,7 @@ class AudioController:
         """
         Set the global volume
 
-        Parameters:
+        Args:
             set_vol (int): The volume to set
         """
         cleaned_vol: str = str(max(0, min(set_vol, 100)))
@@ -107,7 +112,7 @@ class AudioController:
         """
         Mute or unmute the audio
 
-        Parameters:
+        Args:
             mute (bool): Whether to mute or unmute
         """
         AudioController.__run_command(
@@ -130,7 +135,7 @@ class AudioController:
         """
         Get the playing status of the player
 
-        Parameters:
+        Args:
             player (str): The player to check, defaults to "playerctld"
 
         Returns:
@@ -165,7 +170,7 @@ class AudioController:
         """
         Pauses all players and plays the specified player
 
-        Parameters:
+        Args:
             player (str): The player
         """
         # Pause all players, then switch and resume selected player
@@ -211,27 +216,33 @@ class AudioController:
         """
         Get the media thumbnail
 
-        Parameters:
+        Args:
             media (CurrentMedia): The current media
 
         Returns:
             Path: The path to the media thumbnail
         """
+        default_thumbnail: Path = Path("images/icon.png")
+
         cover_path: Path = AudioController.media_cover_path
 
         if not cover_path.exists():
             cover_path.mkdir(parents=True, exist_ok=True)
 
-        hash_str = f"{media.title}-{media.artist}".encode("utf-8")
-        hash_object = hashlib.md5(hash_str)
-        hash_hex = hash_object.hexdigest()
+        file_name: str = base64.b64encode(
+            f"{media.title}-{media.artist}".encode()
+        ).decode()
         local_filename = Path(
             cover_path,
-            f"{hash_hex}.png",
+            f"{file_name}.png",
         )
 
         if local_filename.exists():
-            return local_filename
+            # If this fails, the file is still being downloaded
+            if AudioController.validate_image(local_filename):
+                return local_filename
+            else:
+                return default_thumbnail
 
         old_thumbnails = glob.glob(f"{cover_path}/*.png")
         if len(old_thumbnails) > 50:
@@ -245,21 +256,62 @@ class AudioController:
             if thumbnail_url.startswith("file://"):
                 local_filename = Path(thumbnail_url[7:])
             elif thumbnail_url.startswith("http"):
-                AudioController.__download_thumbnail(media, local_filename)
+                success: bool = AudioController.__download_thumbnail(
+                    media, local_filename, 0.3, 1
+                )
 
-        return local_filename if local_filename.exists() else Path("images/icon.png")
+                if not success:
+                    threading.Thread(
+                        target=AudioController.__download_thumbnail,
+                        args=(media, local_filename, 2, 3),
+                        daemon=True,
+                    ).start()
+
+        return (
+            local_filename
+            if AudioController.validate_image(local_filename)
+            else default_thumbnail
+        )
 
     @staticmethod
-    def __download_thumbnail(media: CurrentMedia, local_filename: Path) -> None:
+    def validate_image(image_path: Path) -> bool:
+        """
+        Validate if the image path is a valid image file
+
+        Args:
+            image_path (Path): The path to the image file
+
+        Returns:
+            bool: True if the image path is a valid image file, False otherwise
+        """
+        try:
+            if not image_path.is_file():
+                return False
+
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(image_path))
+            del pixbuf
+
+            return True
+        except Exception as e:
+            logger.warning(
+                f"File {image_path} is not a valid image (GdkPixbuf validation failed): {e}."
+            )
+
+            return False
+
+    @staticmethod
+    def __download_thumbnail(
+        media: CurrentMedia, local_filename: Path, timeout_secs: float, tries: int
+    ) -> bool:
         """
         Download the thumbnail of the media
 
-        Parameters:
+        Args:
             media (CurrentMedia): The current media
             local_filename (Path): The local filename to save the thumbnail
+            timeout_secs (float): The timeout in seconds
+            tries (int): The number of retry attempts
         """
-        timeout_secs: float = 1
-        tries: int = 3
 
         try:
             result = subprocess.run(
@@ -276,12 +328,13 @@ class AudioController:
                 check=True,
             )
             if result.returncode != 0:
-                os.remove(local_filename)
-                logger.error(f"Failed to download image from {media.thumbnail_path}")
-        except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"Got return code {result.returncode}")
+            return True
+        except (subprocess.CalledProcessError, RuntimeError) as e:
             if local_filename.exists():
                 os.remove(local_filename)
             logger.error(f"Failed to download image from {media.thumbnail_path}: {e}")
+        return False
 
 
 class Parser:
@@ -328,7 +381,7 @@ class Parser:
         """
         Extract an item from a string using regex, used to extract metadata
 
-        Parameters:
+        Args:
             item (str): The item to extract
             search_str (str): The string to search
             ok_if_empty (bool): Whether to return an empty string if the item is not found

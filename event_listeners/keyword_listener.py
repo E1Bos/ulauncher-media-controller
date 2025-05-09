@@ -23,7 +23,7 @@ class KeywordListener(EventListener):
         """
         Render the main page or search for a query
 
-        Parameters:
+        Args:
             event (KeywordQueryEvent): The event that was triggered
             extension (PlayerMain): The main extension class
 
